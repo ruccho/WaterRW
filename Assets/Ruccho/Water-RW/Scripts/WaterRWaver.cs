@@ -200,8 +200,11 @@ namespace Ruccho
             deformWaveJobHandles.Complete();
 
             // メッシュの更新を反映
-            //mesh.SetVertices(new List<Vector3>(Vertices.ToArray()));
+#if UNITY_2019_3_OR_NEWER
+            mesh.SetVertices(Vertices);
+#else
             mesh.vertices = Vertices.ToArray();
+#endif
 
             // メッシュを更新
             deformWaveJobHandles = new DeformWaveJob
