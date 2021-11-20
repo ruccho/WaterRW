@@ -48,6 +48,8 @@ namespace Ruccho
         /// Max width of wave area to be calculated (in world space).
         /// </summary>
         [SerializeField, Min(1f)] private int maxWaveWidth = 256;
+        
+        [SerializeField, Header("Debug")] private bool viewWaveBuffer = false;
 
         #endregion
 
@@ -423,6 +425,7 @@ namespace Ruccho
 
         private void OnGUI()
         {
+            if (!viewWaveBuffer) return;
             if (!waveBufferFixed) return;
             GUI.DrawTexture(new Rect(0, 0, 1024, 20), waveBufferFixed, ScaleMode.StretchToFill, false);
         }
