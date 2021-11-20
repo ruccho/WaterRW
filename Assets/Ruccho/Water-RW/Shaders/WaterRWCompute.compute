@@ -1,0 +1,128 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel Main
+
+struct InteractionItem
+{
+    float startPos;
+    float endPos;
+    float velX;
+    float velY;
+};
+
+#define PI 3.1415927
+#define PI_2 6.2831853
+
+// exposed properties
+
+// Main
+RWStructuredBuffer<InteractionItem> _InteractionBuffer;
+uint _NumInteractionItems;
+
+float _WaveBufferPixelsPerUnit;
+RWTexture2D<float4> _WaveBufferPrePreDest;
+RWTexture2D<float4> _WaveBufferPreSrc;
+
+float _SpatialScale;
+float _WaveConstant2;
+float _Decay;
+float _DeltaTime;
+
+// Index
+
+RWStructuredBuffer<uint> _MeshIndexBuffer;
+
+float getWaveValue(float4 color, float channel)
+{
+    float result = 0;
+    result += channel == 0 ? color.x : 0;
+    result += channel == 1 ? color.y : 0;
+    result += channel == 2 ? color.z : 0;
+    result += channel == 3 ? color.w : 0;
+
+    return result;
+}
+
+float calcWave(float4 c_prepre, float4 c_pre_l, float4 c_pre, float4 c_pre_r, float k, uint index)
+{
+    uint x_p = index / 4;
+    uint c_p = index % 4;
+    uint c_p_l = (index + 3) % 4;
+    uint c_p_r = (index + 1) % 4;
+
+    float4 left = c_p == 0 ? c_pre_l : c_pre;
+    float4 right = c_p == 3 ? c_pre_r : c_pre;
+
+    float prepre = getWaveValue(c_prepre, c_p);
+    float pre = getWaveValue(c_pre, c_p);
+    float pre_l = getWaveValue(left, c_p_l);
+    float pre_r = getWaveValue(right, c_p_r);
+
+    float w = (pre_r + pre_l - 2.0 * pre) * k - prepre + 2.0 * pre;
+    w = lerp(w, 0, 1.0 - pow(abs(1.0 - _Decay), _DeltaTime));
+
+    return w;
+}
+
+float interactionDelta(float src, uint index, float widthInUnit, InteractionItem item)
+{
+    float unit = index * 0.25 / _WaveBufferPixelsPerUnit;
+    float localPosition = unit - widthInUnit * 0.5;
+
+    float l = item.endPos - item.startPos;
+    float c = item.startPos + l * 0.5;
+    float p = (localPosition - c) / l * PI_2;
+    float w = sin(p) * item.velX * 0.2 + item.velY * 0.5;
+    float m = step(-PI, p) * step(p, PI);
+    float d = lerp(src, w, 1.0 - pow(1.0 - 0.1, _DeltaTime * 60.0));
+    
+    return lerp(src, d, m);
+}
+
+
+[numthreads(1024,1,1)]
+void Main(uint3 dtid : SV_DispatchThreadID)
+{
+    float dx = 1.0 / (_WaveBufferPixelsPerUnit * 4.0) * max(0.01, _SpatialScale);
+    float dt = _DeltaTime;
+    float c2 = _WaveConstant2;
+
+    float k = c2 * dt * dt / (dx * dx);
+
+    uint id = dtid.x;
+
+    uint waveBufferSize;
+    uint _;
+
+    _WaveBufferPrePreDest.GetDimensions(waveBufferSize, _);
+
+    uint index = clamp(id, 0, waveBufferSize);
+    uint index_l = clamp(id - 1, 0, waveBufferSize);
+    uint index_r = clamp(id + 1, 0, waveBufferSize);
+
+    float4 c_prepre = _WaveBufferPrePreDest[uint2(index, 0)];
+
+    float4 c_pre_l = _WaveBufferPreSrc[uint2(index_l, 0)];
+    float4 c_pre = _WaveBufferPreSrc[uint2(index, 0)];
+    float4 c_pre_r = _WaveBufferPreSrc[uint2(index_r, 0)];
+
+    float i0 = calcWave(c_prepre, c_pre_l, c_pre, c_pre_r, k, id * 4 + 0);
+    float i1 = calcWave(c_prepre, c_pre_l, c_pre, c_pre_r, k, id * 4 + 1);
+    float i2 = calcWave(c_prepre, c_pre_l, c_pre, c_pre_r, k, id * 4 + 2);
+    float i3 = calcWave(c_prepre, c_pre_l, c_pre, c_pre_r, k, id * 4 + 3);
+
+    float widthInUnit = waveBufferSize / _WaveBufferPixelsPerUnit;
+
+    for (uint i = 0; i < _NumInteractionItems; i++)
+    {
+        InteractionItem item = _InteractionBuffer[i];
+
+        i0 = interactionDelta(i0, id * 4 + 0, widthInUnit, item);
+        i1 = interactionDelta(i1, id * 4 + 1, widthInUnit, item);
+        i2 = interactionDelta(i2, id * 4 + 2, widthInUnit, item);
+        i3 = interactionDelta(i3, id * 4 + 3, widthInUnit, item);
+    }
+
+    _WaveBufferPrePreDest[uint2(index, 0)] = (0 <= id && id < waveBufferSize)
+                                                 ? float4(i0, i1, i2, i3)
+                                                 : _WaveBufferPrePreDest[uint2(index, 0)];
+}
