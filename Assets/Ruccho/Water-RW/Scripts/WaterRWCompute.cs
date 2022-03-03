@@ -42,7 +42,7 @@ namespace Ruccho
         [SerializeField, Min(0.1f)] private float spatialScale = 1f;
 
         [SerializeField] private int maxInteractionItems = 16;
-        [SerializeField, Min(1f)] private float waveBufferPixelsPerUnit = 4f;
+        [SerializeField, Min(0.001f)] private float waveBufferPixelsPerUnit = 4f;
 
         /// <summary>
         /// Max width of wave area to be calculated (in world space).
@@ -139,21 +139,21 @@ namespace Ruccho
 
             if (waveBufferA == null)
             {
-                waveBufferA = new RenderTexture(waveBufferSizeInPixels, 1, 0, GraphicsFormat.R32G32B32A32_SFloat);
+                waveBufferA = new RenderTexture(waveBufferSizeInPixels, 1, 0, GraphicsFormat.R32_SFloat);
                 waveBufferA.enableRandomWrite = true;
                 waveBufferA.Create();
             }
 
             if (waveBufferB == null)
             {
-                waveBufferB = new RenderTexture(waveBufferSizeInPixels, 1, 0, GraphicsFormat.R32G32B32A32_SFloat);
+                waveBufferB = new RenderTexture(waveBufferSizeInPixels, 1, 0, GraphicsFormat.R32_SFloat);
                 waveBufferB.enableRandomWrite = true;
                 waveBufferB.Create();
             }
 
             if (waveBufferFixed == null)
             {
-                waveBufferFixed = new RenderTexture(waveBufferSizeInPixels, 1, 0, GraphicsFormat.R32G32B32A32_SFloat);
+                waveBufferFixed = new RenderTexture(waveBufferSizeInPixels, 1, 0, GraphicsFormat.R32_SFloat);
                 waveBufferFixed.Create();
                 
                 material.mainTexture = waveBufferFixed;

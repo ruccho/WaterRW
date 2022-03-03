@@ -105,5 +105,6 @@ MonoBehaviour:
     m_Bits: 1
   spatialScale: 1
   maxInteractionItems: 32
-  waveBufferPixelsPerUnit: 4
+  waveBufferPixelsPerUnit: 16
   maxWaveWidth: 256
+  viewWaveBuffer: 0

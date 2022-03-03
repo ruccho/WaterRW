@@ -114,18 +114,6 @@
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
-
-            float getWaveValue(float4 color, float channel)
-            {
-                float result = 0;
-                result += channel == 0 ? color.r : 0;
-                result += channel == 1 ? color.g : 0;
-                result += channel == 2 ? color.b : 0;
-                result += channel == 3 ? color.a : 0;
-
-                return result;
-            }
-
             v2f_custom SpriteVertCustom(appdata IN)
             {
                 v2f_custom OUT;
@@ -143,27 +131,13 @@
                 float bufferWidth = _MainTex_TexelSize.z;
                 
                 float3 posWorldScale = mul(objectToWorldScale, v).xyz;
+                
                 // [-scale*0.5, scale*0.5] [-maxWidth*0.5, maxWidth*0.5]
                 float posInPixel = posWorldScale.x * _WaveBufferPixelsPerUnit + bufferWidth * 0.5; // [0, bufferSize]
+                
+                float4 wave = tex2Dlod(_MainTex, float4(posInPixel / bufferWidth, 0, 0, 0));
 
-                float leftInChannel = floor(posInPixel * 4);
-                float rightInChannel = ceil(posInPixel * 4);
-
-                uint leftChannel = leftInChannel % 4;
-                uint rightChannel = rightInChannel % 4;
-
-                float leftInUvSnapped = (floor(leftInChannel / 4) + 0.5) / bufferWidth;
-                float rightInUvSnapped = (floor(rightInChannel / 4) + 0.5) / bufferWidth;
-
-                float4 left = tex2Dlod(_MainTex, float4(leftInUvSnapped, 0, 0, 0));
-                float4 right = tex2Dlod(_MainTex, float4(rightInUvSnapped, 0, 0, 0));
-
-                float w_left = getWaveValue(left, leftChannel);
-                float w_right = getWaveValue(right, rightChannel);
-
-                float w_t = frac(posInPixel * 4);
-
-                float w = lerp(w_left, w_right, w_t);
+                float w = wave.r;
 
                 OUT.vertex = UnityFlipSprite(v, _Flip);
                 float4 world = mul(unity_ObjectToWorld, float4(OUT.vertex.xyz, 1.0));
