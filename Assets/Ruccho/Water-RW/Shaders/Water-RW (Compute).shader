@@ -31,6 +31,9 @@
         _SurfaceColor("Surface Color", Color) = (0.43,0.48,0.62, 1.0)
         _SurfaceWidth("Surface Width in Pixel", Float) = 4
         _FadeDistance("Fade Distance in Viewport Space", Float) = 128
+        
+        _SmoothBufferEdge("Smooth Buffer Edge in World Space", Float) = 0.5
+        _WavePositionLocal("Scrolled Position", Float) = 0
     }
 
     SubShader
@@ -94,6 +97,9 @@
             float _SurfaceWidth;
             float _FadeDistance;
 
+            float _SmoothBufferEdge;
+            float _WavePositionLocal;
+
             struct v2f_custom
             {
                 float4 vertex : SV_POSITION;
@@ -104,7 +110,6 @@
 
                 UNITY_VERTEX_OUTPUT_STEREO
             };
-
 
             struct appdata
             {
@@ -133,24 +138,29 @@
                 float3 posWorldScale = mul(objectToWorldScale, v).xyz;
                 
                 // [-scale*0.5, scale*0.5] [-maxWidth*0.5, maxWidth*0.5]
-                float posInPixel = posWorldScale.x * _WaveBufferPixelsPerUnit + bufferWidth * 0.5; // [0, bufferSize]
-                
-                float4 wave = tex2Dlod(_MainTex, float4(posInPixel / bufferWidth, 0, 0, 0));
+                float posWorld = posWorldScale.x - _WavePositionLocal;
+                float posInPixel = posWorld * _WaveBufferPixelsPerUnit + bufferWidth * 0.5; // [0, bufferSize]
 
-                float w = wave.r;
+                float posInUv = posInPixel / bufferWidth;
+                
+                float4 wave = tex2Dlod(_MainTex, float4(posInUv, 0, 0, 0));
+
+                // hide area out of bounds
+                float smooth = _SmoothBufferEdge * _WaveBufferPixelsPerUnit / bufferWidth;
+                float edge = smoothstep(0, smooth, posInUv) * (1 - smoothstep(1 - smooth, 1, posInUv));
+
+                float w = wave.r * edge;
 
                 OUT.vertex = UnityFlipSprite(v, _Flip);
                 float4 world = mul(unity_ObjectToWorld, float4(OUT.vertex.xyz, 1.0));
                 world.y += w * 0.1 * (v.y + 0.5);
-                OUT.vertex = mul(UNITY_MATRIX_VP, world); // UnityObjectToClipPos(OUT.vertex);
+                OUT.vertex = mul(UNITY_MATRIX_VP, world);
                 OUT.texcoord = IN.texcoord;
 
-                OUT.screen = ComputeScreenPos(OUT.vertex);//ComputeScreenPos(UnityObjectToClipPos(v));
-                OUT.world = world;//mul(unity_ObjectToWorld, v).xyz;
+                OUT.screen = ComputeScreenPos(OUT.vertex);
+                OUT.world = world;
 
                 OUT.color = IN.color * _Color * _RendererColor;
-
-                //OUT.color = leftInUvSnapped;
 
                 #ifdef PIXELSNAP_ON
 				OUT.vertex = UnityPixelSnap (OUT.vertex);
@@ -161,7 +171,6 @@
 
             fixed4 SpriteFragCustom(v2f_custom IN) : SV_Target
             {
-                //return IN.color;
                 // reflection
                 float4 unitPosClip = UnityObjectToClipPos(float4(0, 0.5, 0, 1));
 

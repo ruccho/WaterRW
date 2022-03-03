@@ -19,23 +19,23 @@ RWStructuredBuffer<InteractionItem> _InteractionBuffer;
 uint _NumInteractionItems;
 
 float _WaveBufferPixelsPerUnit;
-RWTexture2D<float> _WaveBufferPrePreDest;
-RWTexture2D<float> _WaveBufferPreSrc;
+RWTexture2D<float> _WaveBufferPrePre;
+RWTexture2D<float> _WaveBufferPre;
+RWTexture2D<float> _WaveBufferDest;
 
 float _SpatialScale;
 float _WaveConstant2;
 float _Decay;
 float _DeltaTime;
 
-// Index
-
-RWStructuredBuffer<uint> _MeshIndexBuffer;
-
+float _WavePositionLocal;
+int _ScrollDeltaPixelPre;
+int _ScrollDeltaPixel;
 
 float interactionDelta(float src, uint index, float widthInUnit, InteractionItem item)
 {
     float unit = index / _WaveBufferPixelsPerUnit;
-    float localPosition = unit - widthInUnit * 0.5;
+    float localPosition = unit - (widthInUnit * 0.5 - _WavePositionLocal);
 
     float l = item.endPos - item.startPos;
     float c = item.startPos + l * 0.5;
@@ -47,6 +47,14 @@ float interactionDelta(float src, uint index, float widthInUnit, InteractionItem
     return lerp(src, d, m);
 }
 
+float getWaveValue(RWTexture2D<float> buffer, int pos, uint bufferWidth)
+{
+    int clampedPos = (pos + bufferWidth) % bufferWidth;// clamp(pos, 0, bufferWidth);
+    float w = buffer[uint2(clampedPos, 0)];
+    float edge = (0 <= pos && pos < bufferWidth) ? 1 : 0;
+
+    return w * edge;
+}
 
 [numthreads(1024,1,1)]
 void Main(uint3 dtid : SV_DispatchThreadID)
@@ -62,17 +70,21 @@ void Main(uint3 dtid : SV_DispatchThreadID)
     uint waveBufferSize;
     uint _;
 
-    _WaveBufferPrePreDest.GetDimensions(waveBufferSize, _);
+    _WaveBufferPrePre.GetDimensions(waveBufferSize, _);
 
-    uint index = clamp(id, 0, waveBufferSize);
-    uint index_l = clamp(id - 1, 0, waveBufferSize);
-    uint index_r = clamp(id + 1, 0, waveBufferSize);
+    int index = clamp(id, 0, waveBufferSize);
+    
+    // scroll
+    int index_prepre = id + _ScrollDeltaPixel + _ScrollDeltaPixelPre;
+    int index_pre = id + _ScrollDeltaPixel;
+    int index_l = id - 1 + _ScrollDeltaPixel;
+    int index_r = id + 1 + _ScrollDeltaPixel;
 
-    float c_prepre = _WaveBufferPrePreDest[uint2(index, 0)];
+    float c_prepre = getWaveValue(_WaveBufferPrePre, index_prepre, waveBufferSize);
 
-    float c_pre_l = _WaveBufferPreSrc[uint2(index_l, 0)];
-    float c_pre = _WaveBufferPreSrc[uint2(index, 0)];
-    float c_pre_r = _WaveBufferPreSrc[uint2(index_r, 0)];
+    float c_pre_l = getWaveValue(_WaveBufferPre, index_l, waveBufferSize);
+    float c_pre = getWaveValue(_WaveBufferPre, index_pre, waveBufferSize);
+    float c_pre_r = getWaveValue(_WaveBufferPre, index_r, waveBufferSize);
 
     // wave equation
     float w = (c_pre_r + c_pre_l - 2.0 * c_pre) * k - c_prepre + 2.0 * c_pre;
@@ -90,5 +102,5 @@ void Main(uint3 dtid : SV_DispatchThreadID)
         
     }
 
-    _WaveBufferPrePreDest[uint2(index, 0)] = w;
+    _WaveBufferDest[uint2(index, 0)] = w;
 }

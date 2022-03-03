@@ -9,6 +9,7 @@ using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
+using UnityEngine.Serialization;
 
 namespace Ruccho
 {
@@ -38,16 +39,19 @@ namespace Ruccho
 
         [SerializeField, Range(0.05f, 0.95f)] private float c = 0.1f;
         [SerializeField, Range(0f, 1f)] private float decay = default;
+        [SerializeField] private bool enableInteraction = true;
         [SerializeField] private LayerMask layersToInteractWith = 1;
         [SerializeField, Min(0.1f)] private float spatialScale = 1f;
 
         [SerializeField] private int maxInteractionItems = 16;
         [SerializeField, Min(0.001f)] private float waveBufferPixelsPerUnit = 4f;
+        
+        [SerializeField] public bool scrollToMainCamera = true;
 
         /// <summary>
         /// Max width of wave area to be calculated (in world space).
         /// </summary>
-        [SerializeField, Min(1f)] private int maxWaveWidth = 256;
+        [SerializeField, Min(1f), FormerlySerializedAs("maxWaveWidth")] private int maxSurfaceWidth = 256;
         
         [SerializeField, Header("Debug")] private bool viewWaveBuffer = false;
 
@@ -58,7 +62,19 @@ namespace Ruccho
         private ComputeBuffer interactionBuffer = default;
         private RenderTexture waveBufferA = default;
         private RenderTexture waveBufferB = default;
-        private RenderTexture waveBufferFixed = default;
+        private RenderTexture waveBufferC = default;
+        
+        private int currentBuffer = 0;
+
+        private RenderTexture WaveBufferPrePre =>
+            currentBuffer == 0 ? waveBufferA : (currentBuffer == 1 ? waveBufferB : waveBufferC);
+        private RenderTexture WaveBufferPre =>
+            currentBuffer == 0 ? waveBufferB : (currentBuffer == 1 ? waveBufferC : waveBufferA);
+        private RenderTexture WaveBufferDest =>
+            currentBuffer == 0 ? waveBufferC : (currentBuffer == 1 ? waveBufferA : waveBufferB);
+
+        private void NextBuffer() => currentBuffer = (currentBuffer + 1) % 3;
+        
 
         private int waveBufferSizeInPixels = 0;
 
@@ -71,20 +87,23 @@ namespace Ruccho
         private int k_NumInteractionItems = Shader.PropertyToID("_NumInteractionItems");
 
         private int k_WaveBufferPixelsPerUnit = Shader.PropertyToID("_WaveBufferPixelsPerUnit");
-        private int k_WaveBufferPrePreDest = Shader.PropertyToID("_WaveBufferPrePreDest");
-        private int k_WaveBufferPreSrc = Shader.PropertyToID("_WaveBufferPreSrc");
+        private int k_WaveBufferPrePre = Shader.PropertyToID("_WaveBufferPrePre");
+        private int k_WaveBufferPre = Shader.PropertyToID("_WaveBufferPre");
+        private int k_WaveBufferDest = Shader.PropertyToID("_WaveBufferDest");
 
         private int k_SpatialScale = Shader.PropertyToID("_SpatialScale");
         private int k_WaveConstant2 = Shader.PropertyToID("_WaveConstant2");
         private int k_Decay = Shader.PropertyToID("_Decay");
         private int k_DeltaTime = Shader.PropertyToID("_DeltaTime");
+        
+        private int k_WavePositionLocal = Shader.PropertyToID("_WavePositionLocal");
+        private int k_ScrollDeltaPixelPre = Shader.PropertyToID("_ScrollDeltaPixelPre");
+        private int k_ScrollDeltaPixel = Shader.PropertyToID("_ScrollDeltaPixel");
 
         private float stackedDeltaTime = 0f;
 
         private readonly Dictionary<Rigidbody2D, InteractionItem> tempInteractionItems =
             new Dictionary<Rigidbody2D, InteractionItem>();
-
-        private bool currentBuffer = false;
 
         private NativeArray<Vertex> vertexBuffer = default;
         private NativeArray<IndexSegment> indexBuffer = default;
@@ -94,11 +113,20 @@ namespace Ruccho
         private MeshRenderer meshRenderer = default;
         private Material material = default;
 
+        public float WavePosition { get; set; }
+        private float scrolledPosition = default;
+        private int tempScrollDeltaPixel = 0;
+
         #endregion
 
         private void Reset()
         {
             meshFilter = GetComponent<MeshFilter>();
+        }
+
+        private void Start()
+        {
+            WavePosition = scrolledPosition = transform.position.x;
         }
 
         private void Update()
@@ -135,7 +163,7 @@ namespace Ruccho
             }
 
             if (waveBufferSizeInPixels == 0)
-                waveBufferSizeInPixels = Mathf.RoundToInt(waveBufferPixelsPerUnit * maxWaveWidth);
+                waveBufferSizeInPixels = Mathf.RoundToInt(waveBufferPixelsPerUnit * maxSurfaceWidth);
 
             if (waveBufferA == null)
             {
@@ -151,78 +179,80 @@ namespace Ruccho
                 waveBufferB.Create();
             }
 
-            if (waveBufferFixed == null)
+            if (waveBufferC == null)
             {
-                waveBufferFixed = new RenderTexture(waveBufferSizeInPixels, 1, 0, GraphicsFormat.R32_SFloat);
-                waveBufferFixed.Create();
-                
-                material.mainTexture = waveBufferFixed;
+                waveBufferC = new RenderTexture(waveBufferSizeInPixels, 1, 0, GraphicsFormat.R32_SFloat);
+                waveBufferC.enableRandomWrite = true;
+                waveBufferC.Create();
             }
-
-            // Gather Rigidbodies to interact with
-
-            var transform1 = transform;
-            var position = transform1.position;
-            var lossyScale = transform1.lossyScale;
-            Vector2 surfaceLeftWorld = (Vector2) position + new Vector2(-0.5f, 0.5f) * lossyScale;
-            Vector2 surfaceRightWorld = (Vector2) position + new Vector2(0.5f, 0.5f) * lossyScale;
 
             tempInteractionItems.Clear();
 
-            // |→|
-            int numHits = Physics2D.LinecastNonAlloc(surfaceLeftWorld, surfaceRightWorld, tempLinecastHits,
-                layersToInteractWith);
-
-            for (int i = 0; i < numHits; i++)
+            if (enableInteraction)
             {
-                var hit = tempLinecastHits[i];
-                var rig = hit.rigidbody;
-                if (!rig) continue;
+                // Gather Rigidbodies to interact with
 
-                var localPoint = hit.point - (Vector2) transform1.position;
-                var vel = rig.velocity;
+                var transform1 = transform;
+                var position = transform1.position;
+                var lossyScale = transform1.lossyScale;
+                Vector2 surfaceLeftWorld = (Vector2) position + new Vector2(-0.5f, 0.5f) * lossyScale;
+                Vector2 surfaceRightWorld = (Vector2) position + new Vector2(0.5f, 0.5f) * lossyScale;
+                
+                // |→|
+                int numHits = Physics2D.LinecastNonAlloc(surfaceLeftWorld, surfaceRightWorld, tempLinecastHits,
+                    layersToInteractWith);
 
-                if (!tempInteractionItems.ContainsKey(rig))
+                for (int i = 0; i < numHits; i++)
                 {
-                    tempInteractionItems[rig] = new InteractionItem()
-                    {
-                        startPosition = localPoint.x,
-                        endPosition = lossyScale.x * 0.5f,
-                        horizontalVelocity = vel.x,
-                        verticalVelocity = vel.y
-                    };
-                }
-            }
+                    var hit = tempLinecastHits[i];
+                    var rig = hit.rigidbody;
+                    if (!rig) continue;
 
-            // |←|
-            numHits = Physics2D.LinecastNonAlloc(surfaceRightWorld, surfaceLeftWorld, tempLinecastHits,
-                layersToInteractWith);
-
-            for (int i = 0; i < numHits; i++)
-            {
-                var hit = tempLinecastHits[i];
-                var rig = hit.rigidbody;
-                if (!rig) continue;
-
-                var localPoint = hit.point - (Vector2) transform1.position;
-
-                if (tempInteractionItems.ContainsKey(rig))
-                {
-                    var old = tempInteractionItems[rig];
-                    old.endPosition = localPoint.x;
-                    tempInteractionItems[rig] = old;
-                }
-                else
-                {
+                    var localPoint = hit.point - (Vector2)transform1.position;
                     var vel = rig.velocity;
 
-                    tempInteractionItems[rig] = new InteractionItem()
+                    if (!tempInteractionItems.ContainsKey(rig))
                     {
-                        startPosition = lossyScale.x * -0.5f,
-                        endPosition = localPoint.x,
-                        horizontalVelocity = vel.x,
-                        verticalVelocity = vel.y
-                    };
+                        tempInteractionItems[rig] = new InteractionItem()
+                        {
+                            startPosition = localPoint.x,
+                            endPosition = lossyScale.x * 0.5f,
+                            horizontalVelocity = vel.x,
+                            verticalVelocity = vel.y
+                        };
+                    }
+                }
+
+                // |←|
+                numHits = Physics2D.LinecastNonAlloc(surfaceRightWorld, surfaceLeftWorld, tempLinecastHits,
+                    layersToInteractWith);
+
+                for (int i = 0; i < numHits; i++)
+                {
+                    var hit = tempLinecastHits[i];
+                    var rig = hit.rigidbody;
+                    if (!rig) continue;
+
+                    var localPoint = hit.point - (Vector2)transform1.position;
+
+                    if (tempInteractionItems.ContainsKey(rig))
+                    {
+                        var old = tempInteractionItems[rig];
+                        old.endPosition = localPoint.x;
+                        tempInteractionItems[rig] = old;
+                    }
+                    else
+                    {
+                        var vel = rig.velocity;
+
+                        tempInteractionItems[rig] = new InteractionItem()
+                        {
+                            startPosition = lossyScale.x * -0.5f,
+                            endPosition = localPoint.x,
+                            horizontalVelocity = vel.x,
+                            verticalVelocity = vel.y
+                        };
+                    }
                 }
             }
 
@@ -248,19 +278,39 @@ namespace Ruccho
             computeShader.SetFloat(k_Decay, decay);
             computeShader.SetFloat(k_DeltaTime, fixedTimeStep);
 
+            if (scrollToMainCamera)
+            {
+                var cam = Camera.main;
+                if(cam) WavePosition = cam.transform.position.x;
+            }
+
             for (int i = 0; i < numPerform; i++)
             {
-                computeShader.SetTexture(kernelIndex.Value, k_WaveBufferPrePreDest,
-                    currentBuffer ? waveBufferA : waveBufferB);
-                computeShader.SetTexture(kernelIndex.Value, k_WaveBufferPreSrc,
-                    currentBuffer ? waveBufferB : waveBufferA);
-                currentBuffer = !currentBuffer;
+                float deltaPosition = WavePosition - scrolledPosition;
+
+                float deltaPixels = deltaPosition * waveBufferPixelsPerUnit;
+                int deltaPixelsSnapped = (int)Mathf.Sign(deltaPixels) * Mathf.FloorToInt(Mathf.Abs(deltaPixels));
+
+                scrolledPosition += deltaPixelsSnapped / waveBufferPixelsPerUnit;
+
+                int scrollDeltaPixel = deltaPixelsSnapped;
+                int scrollDeltaPixelPre = tempScrollDeltaPixel;
+                tempScrollDeltaPixel = scrollDeltaPixel;
+                
+                computeShader.SetFloat(k_WavePositionLocal, scrolledPosition - transform.position.x);
+                computeShader.SetInt(k_ScrollDeltaPixelPre, scrollDeltaPixelPre);
+                computeShader.SetInt(k_ScrollDeltaPixel, scrollDeltaPixel);
+                computeShader.SetTexture(kernelIndex.Value, k_WaveBufferPrePre, WaveBufferPrePre);
+                computeShader.SetTexture(kernelIndex.Value, k_WaveBufferPre, WaveBufferPre);
+                computeShader.SetTexture(kernelIndex.Value, k_WaveBufferDest, WaveBufferDest);
+                NextBuffer();
 
                 int numGroups = Mathf.CeilToInt((float) waveBufferSizeInPixels / NumComputeThreads);
                 computeShader.Dispatch(kernelIndex.Value, numGroups, 1, 1);
             }
 
-            Graphics.Blit(currentBuffer ? waveBufferB : waveBufferA, waveBufferFixed);
+            material.mainTexture = WaveBufferPre;
+            material.SetFloat(k_WavePositionLocal, WavePosition - transform.position.x);
 
             // Mesh
 
@@ -426,8 +476,8 @@ namespace Ruccho
         private void OnGUI()
         {
             if (!viewWaveBuffer) return;
-            if (!waveBufferFixed) return;
-            GUI.DrawTexture(new Rect(0, 0, 1024, 20), waveBufferFixed, ScaleMode.StretchToFill, false);
+            if (!WaveBufferPre) return;
+            GUI.DrawTexture(new Rect(0, 0, 1024, 20), WaveBufferPre, ScaleMode.StretchToFill, false);
         }
 
         [StructLayout(LayoutKind.Sequential)]

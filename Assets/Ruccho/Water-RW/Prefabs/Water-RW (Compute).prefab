@@ -96,15 +96,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   meshFilter: {fileID: 2933080294895812737}
   computeShader: {fileID: 7200000, guid: e4cfa8cc3312269428349b13112ba176, type: 3}
-  meshSegmentsPerUnit: 16
+  meshSegmentsPerUnit: 4
   fixedTimeStep: 0.02
   c: 0.8
   decay: 0.852
+  enableInteraction: 1
   layersToInteractWith:
     serializedVersion: 2
     m_Bits: 1
-  spatialScale: 1
+  spatialScale: 0.25
   maxInteractionItems: 32
-  waveBufferPixelsPerUnit: 16
-  maxWaveWidth: 256
+  waveBufferPixelsPerUnit: 4
+  scrollToMainCamera: 1
+  maxSurfaceWidth: 21
   viewWaveBuffer: 0
