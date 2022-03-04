@@ -1,5 +1,7 @@
 # WaterRW
 
+[日本語版](<README (ja).md>)
+
 WaterRW is 2D interactive water system for Unity.
 
 ![001](https://user-images.githubusercontent.com/16096562/73915969-d07dff00-48ff-11ea-8049-35ed87a50215.gif)
@@ -23,7 +25,7 @@ Some platforms such as WebGL or old mobile devices don't support Compute Shader.
 
 # Material Settings Guide
 
-WaterRW uses the shader or `Water-RW/With Compute`.
+WaterRW uses the shader `Water-RW/With Compute`.
 
 ![image](https://user-images.githubusercontent.com/16096562/73915083-e68ac000-48fd-11ea-84b7-42de766e5da0.png)
 
@@ -74,7 +76,8 @@ In inspector of `WaterRWCompute` script, select layers to interact with in `Laye
 | Spatial Scale               | `float `             | Horizontal scale used in wave calculation.                                                   |
 | Max Interaction Items       | `float `             | Max number of rigidbodies to interact with.                                                  |
 | Wave Buffer Pixels Per Unit | `float `             | Resolution of buffers used to wave calculation.                                              |
-| Max wave width              | `float `             | Max width of the wave in world scale.                                                        |
+| Scroll To Main Camera       | `bool `              | Track the range of the wave calculation to the position of the main camera.                  |
+| Max Surface width           | `float `             | Max width of the wave in world scale.                                                        |
 
 ## Avoid Divergence
 
@@ -89,3 +92,10 @@ To avoid divergence, keep `0 ≤ (C * dt / dx) ≤ 1`.
 `dx` = `Spatial Scale` / `Wave Buffer Pixels Per Unit`
 
 ---
+
+
+## Buffer Scrolling
+
+Although the size of the buffer used for wave calculation is finite, interaction with the seemingly infinite surface of the water can be achieved by making the wave calculation range follow the camera position.
+If `Scroll To Main Camera` is true, it will automatically follow `Camera.main`.
+To set it manually, set the X coordinate to `float WaterRWCompute.WavePosition`.
