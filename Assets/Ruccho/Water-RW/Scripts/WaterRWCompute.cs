@@ -57,6 +57,7 @@ namespace Ruccho
         [SerializeField, Min(1f), FormerlySerializedAs("maxWaveWidth")] private int maxSurfaceWidth = 256;
         
         [SerializeField, Header("Debug")] private bool viewWaveBuffer = false;
+        [SerializeField] private bool printItems = false;
 
         #endregion
 
@@ -182,8 +183,6 @@ namespace Ruccho
             {
                 interactionBuffer?.Dispose();
                 interactionBuffer = new ComputeBuffer(interactionItems.Length, Marshal.SizeOf<InteractionItem>());
-
-                computeShader.SetBuffer(kernelIndex.Value, k_InteractionBuffer, interactionBuffer);
             }
 
             if (waveBufferSizeInPixels == 0)
@@ -280,17 +279,16 @@ namespace Ruccho
                 }
             }
 
-            /*
-            if (tempInteractionItems.Count > 0)
+            if (printItems && tempInteractionItems.Count > 0)
             {
-                Debug.Log("ITEMS");
+                Debug.Log($"{tempInteractionItems.Count} ITEMS");
                 foreach (var item in tempInteractionItems)
                 {
                     var v = item.Value;
                     Debug.Log($"{v.startPosition}, {v.endPosition}, {v.horizontalVelocity}, {v.verticalVelocity}");
                 }
             }
-            */
+            
 
             numInteractionItems = Mathf.Min(interactionItems.Length, tempInteractionItems.Count);
 
@@ -307,6 +305,7 @@ namespace Ruccho
             // Compute
 
             interactionBuffer.SetData(interactionItems);
+            computeShader.SetBuffer(kernelIndex.Value, k_InteractionBuffer, interactionBuffer);
             computeShader.SetInt(k_NumInteractionItems, numInteractionItems);
             computeShader.SetFloat(k_WaveBufferPixelsPerUnit, waveBufferPixelsPerUnit);
             computeShader.SetFloat(k_SpatialScale, spatialScale);

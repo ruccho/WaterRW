@@ -38,6 +38,8 @@ float interactionDelta(float src, uint index, float widthInUnit, InteractionItem
     float localPosition = unit - (widthInUnit * 0.5 - _WavePositionLocal);
 
     float l = item.endPos - item.startPos;
+    if(l <= 0) return src;
+    
     float c = item.startPos + l * 0.5;
     float p = (localPosition - c) / l * PI_2;
     float w = sin(p) * item.velX * 0.2 + item.velY * 0.5;
