@@ -35,7 +35,10 @@ namespace Ruccho
         private float meshSegmentsPerUnit = 16f;
 
         [SerializeField, Header("Wave Calculation")]
-        private float fixedTimeStep = 0.02f;
+        private UpdateModeType updateMode = UpdateModeType.FixedUpdate;
+
+        [SerializeField] private bool overrideFixedTimeStep = false;
+        [SerializeField] private float fixedTimeStep = 0.02f;
 
         [SerializeField, Range(0.05f, 0.95f)] private float c = 0.1f;
         [SerializeField, Range(0f, 1f)] private float decay = default;
@@ -117,8 +120,16 @@ namespace Ruccho
         private float scrolledPosition = default;
         private int tempScrollDeltaPixel = 0;
 
+        private float TimeStep => overrideFixedTimeStep ? fixedTimeStep : Time.fixedDeltaTime;
+
         #endregion
 
+        public enum UpdateModeType
+        {
+            FixedUpdate,
+            Update
+        }
+        
         private void Reset()
         {
             meshFilter = GetComponent<MeshFilter>();
@@ -129,17 +140,30 @@ namespace Ruccho
             WavePosition = scrolledPosition = transform.position.x;
         }
 
+        private void FixedUpdate()
+        {
+            if (updateMode != UpdateModeType.FixedUpdate) return;
+
+            UpdateWave(Time.fixedDeltaTime);
+        }
+
         private void Update()
+        {
+            if (updateMode != UpdateModeType.Update) return;
+            
+            UpdateWave(Time.deltaTime);
+        }
+
+        private void UpdateWave(float deltaTime)
         {
             if (!meshFilter) meshFilter = GetComponent<MeshFilter>();
             if (!meshFilter) return;
-
-            stackedDeltaTime += Time.deltaTime;
-
-            int steps = Mathf.FloorToInt(stackedDeltaTime / fixedTimeStep);
-            stackedDeltaTime -= steps * fixedTimeStep;
-
-            UpdateWave(steps);
+            
+            stackedDeltaTime += deltaTime;
+            int numPerform = Mathf.FloorToInt(stackedDeltaTime / TimeStep);
+            stackedDeltaTime %= TimeStep;
+            
+            UpdateWave(numPerform);
         }
 
         private void UpdateWave(int numPerform)
@@ -256,6 +280,18 @@ namespace Ruccho
                 }
             }
 
+            /*
+            if (tempInteractionItems.Count > 0)
+            {
+                Debug.Log("ITEMS");
+                foreach (var item in tempInteractionItems)
+                {
+                    var v = item.Value;
+                    Debug.Log($"{v.startPosition}, {v.endPosition}, {v.horizontalVelocity}, {v.verticalVelocity}");
+                }
+            }
+            */
+
             numInteractionItems = Mathf.Min(interactionItems.Length, tempInteractionItems.Count);
 
             {
@@ -276,7 +312,7 @@ namespace Ruccho
             computeShader.SetFloat(k_SpatialScale, spatialScale);
             computeShader.SetFloat(k_WaveConstant2, c * c);
             computeShader.SetFloat(k_Decay, decay);
-            computeShader.SetFloat(k_DeltaTime, fixedTimeStep);
+            computeShader.SetFloat(k_DeltaTime, TimeStep);
 
             if (scrollToMainCamera)
             {
@@ -471,6 +507,10 @@ namespace Ruccho
 
                 Gizmos.DrawLine(p0, p1);
             }
+            
+            // surface
+            Gizmos.DrawWireCube(new Vector2(WavePosition, transform.position.y), new Vector3(maxSurfaceWidth, transform.lossyScale.y, 0));
+            
         }
 
         private void OnGUI()
