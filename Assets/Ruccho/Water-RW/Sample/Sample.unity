@@ -646,8 +646,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 335720570}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.25, y: 0.28, z: 10}
-  m_LocalScale: {x: 1.8126994, y: 1.8126994, z: 1.8126994}
+  m_LocalPosition: {x: 1.35, y: 0.46, z: 10}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 0}
   m_RootOrder: 2
@@ -2392,7 +2392,7 @@ SpriteRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2047000755}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 0
   m_ReceiveShadows: 0
   m_DynamicOccludee: 1
@@ -2583,11 +2583,6 @@ PrefabInstance:
         type: 3}
       propertyPath: maxWaveWidth
       value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 465085849670155082, guid: 5df8722b9653c164fa2ab75d6189be3a,
-        type: 3}
-      propertyPath: viewWaveBuffer
-      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 465085849670155082, guid: 5df8722b9653c164fa2ab75d6189be3a,
         type: 3}

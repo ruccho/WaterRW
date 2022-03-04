@@ -97,6 +97,8 @@ MonoBehaviour:
   meshFilter: {fileID: 2933080294895812737}
   computeShader: {fileID: 7200000, guid: e4cfa8cc3312269428349b13112ba176, type: 3}
   meshSegmentsPerUnit: 4
+  updateMode: 0
+  overrideFixedTimeStep: 0
   fixedTimeStep: 0.02
   c: 0.8
   decay: 0.852
@@ -108,5 +110,6 @@ MonoBehaviour:
   maxInteractionItems: 32
   waveBufferPixelsPerUnit: 4
   scrollToMainCamera: 1
-  maxSurfaceWidth: 21
+  maxSurfaceWidth: 20
   viewWaveBuffer: 0
+  printItems: 0

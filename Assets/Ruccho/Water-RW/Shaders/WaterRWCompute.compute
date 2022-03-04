@@ -61,7 +61,7 @@ float getWaveValue(RWTexture2D<float> buffer, int pos, uint bufferWidth)
 [numthreads(1024,1,1)]
 void Main(uint3 dtid : SV_DispatchThreadID)
 {
-    float dx = max(0.01, _SpatialScale) / _WaveBufferPixelsPerUnit;
+    float dx = max(0.001, _SpatialScale) / _WaveBufferPixelsPerUnit;
     float dt = _DeltaTime;
     float c2 = _WaveConstant2;
 

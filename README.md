@@ -6,7 +6,7 @@ WaterRW is 2D interactive water system for Unity.
 
 # Requirements
 
-- This project is made with Unity 2020.3.10f1.
+- This project is made with Unity 2020.3.12f1.
 - By default, `Burst` package is required.
 
 # Quick Start
@@ -17,9 +17,13 @@ WaterRW is 2D interactive water system for Unity.
 
 Water-RW prefab is composed of `WaterRWCompute` script, `MeshFilter`, and `MeshRenderer` with `Water-RW/With Compute` material.
 
+Some platforms such as WebGL or old mobile devices don't support Compute Shader. Make sure your target platform does before using WaterRW.
+
+(Legacy implementation with C# Job System is also included in the package but it is no longer supported.)
+
 # Material Settings Guide
 
-WaterRW uses the shader `Water-RW/Standard` or `Water-RW/With Compute`.
+WaterRW uses the shader or `Water-RW/With Compute`.
 
 ![image](https://user-images.githubusercontent.com/16096562/73915083-e68ac000-48fd-11ea-84b7-42de766e5da0.png)
 
@@ -45,9 +49,9 @@ WaterRW uses the shader `Water-RW/Standard` or `Water-RW/With Compute`.
 | Surface Width in Pixel          | `Color `    | Width of surface line in pixels.                                              |
 | Fade Distance in Viewport Space | `Float `    | Vertical size of fade to avoid display reflection areas out of GrabPass.      |
 
-# Enable interactions
+# Enable Interactions
 
-![001](https://user-images.githubusercontent.com/16096562/73915969-d07dff00-48ff-11ea-8049-35ed87a50215.gif)
+![image](https://user-images.githubusercontent.com/16096562/156744259-b001ac3c-68a5-4a62-8d82-b08660f6a596.gif)
 
 WaterRW supports rough interation with rigidbodies. (Colliders with complex shapes may not be handled correctly!)
 
@@ -57,12 +61,31 @@ In inspector of `WaterRWCompute` script, select layers to interact with in `Laye
 
 ![image](https://user-images.githubusercontent.com/16096562/142718932-c7c4274f-6a46-46f7-83e9-bf3b20c54ea2.png)
 
-| Property                       | Type        |                                                                                                                                       |
-| ------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Mesh segments Per Unit         | `float `    | Numbers of mesh divisions per unit.                                                                                                   |
-| C                              | `float `    | The constant used in wave calculation. Increasing this will increase the speed of the waves.                                          |
-| Decay                          | `float `    | Coefficient for damping waves.                                                                                                        |
-| Layers To Interact With        | `LayerMask` | Layers to interact with.                                                                                                              |
-| Spatial Scale                  | `float `    | Horizontal scale used in wave calculation. Don't set too small value causing divergence.                                           |
-| Max Interaction Items          | `float `    | Max number of rigidbodies to interact with.                                                                                           |
-| Max wave width                 | `float `    | Max width of the wave in world scale.                                                                                                 |
+| Property                    | Type                 |                                                                                              |
+| --------------------------- | -------------------- | -------------------------------------------------------------------------------------------- |
+| Mesh segments Per Unit      | `float `             | Numbers of mesh divisions per unit.                                                          |
+| Update Mode                 | FixedUpdate / Update | Timing to calculate wave. Use `FixedUpdate` to work interactions correctly.                  |
+| Override Fixed Time Step    | `bool`               | Determine whether to use custom timestep.                                                    |
+| Fixed Time Step             | `float`              | Custom time step.                                                                            |
+| C                           | `float `             | The constant used in wave calculation. Increasing this will increase the speed of the waves. |
+| Decay                       | `float `             | Coefficient for damping waves.                                                               |
+| Enable Interaction          | `float `             | Determine whether to use interaction.                                                        |
+| Layers To Interact With     | `LayerMask`          | Layers to interact with.                                                                     |
+| Spatial Scale               | `float `             | Horizontal scale used in wave calculation.                                                   |
+| Max Interaction Items       | `float `             | Max number of rigidbodies to interact with.                                                  |
+| Wave Buffer Pixels Per Unit | `float `             | Resolution of buffers used to wave calculation.                                              |
+| Max wave width              | `float `             | Max width of the wave in world scale.                                                        |
+
+## Avoid Divergence
+
+Values of `Fixed Time Step`, `C`, `Spatial Scale` and `Wave Buffer Pixels Per Unit` may cause divergence.
+
+To avoid divergence, keep `0 ≤ (C * dt / dx) ≤ 1`.
+
+---
+
+`dt` = time step (`Fixed Time Step` when `Override Fixed Time Step` is true, otherwise `Time.deltaTime` or `Time.fixedDeltaTime` is used)
+
+`dx` = `Spatial Scale` / `Wave Buffer Pixels Per Unit`
+
+---
