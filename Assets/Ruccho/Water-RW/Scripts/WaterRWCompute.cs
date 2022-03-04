@@ -44,10 +44,10 @@ namespace Ruccho
         [SerializeField, Range(0f, 1f)] private float decay = default;
         [SerializeField] private bool enableInteraction = true;
         [SerializeField] private LayerMask layersToInteractWith = 1;
-        [SerializeField, Min(0.1f)] private float spatialScale = 1f;
+        [SerializeField, Min(0.0001f)] private float spatialScale = 1f;
 
         [SerializeField] private int maxInteractionItems = 16;
-        [SerializeField, Min(0.001f)] private float waveBufferPixelsPerUnit = 4f;
+        [SerializeField, Min(0.0001f)] private float waveBufferPixelsPerUnit = 4f;
         
         [SerializeField] public bool scrollToMainCamera = true;
 
@@ -209,6 +209,12 @@ namespace Ruccho
                 waveBufferC.Create();
             }
 
+            if (scrollToMainCamera)
+            {
+                var cam = Camera.main;
+                if(cam) WavePosition = cam.transform.position.x;
+            }
+
             tempInteractionItems.Clear();
 
             if (enableInteraction)
@@ -218,63 +224,80 @@ namespace Ruccho
                 var transform1 = transform;
                 var position = transform1.position;
                 var lossyScale = transform1.lossyScale;
-                Vector2 surfaceLeftWorld = (Vector2) position + new Vector2(-0.5f, 0.5f) * lossyScale;
-                Vector2 surfaceRightWorld = (Vector2) position + new Vector2(0.5f, 0.5f) * lossyScale;
+                float scaleX = Mathf.Abs(lossyScale.x);
+                float scaleY = Mathf.Abs(lossyScale.y);
                 
-                // |→|
-                int numHits = Physics2D.LinecastNonAlloc(surfaceLeftWorld, surfaceRightWorld, tempLinecastHits,
-                    layersToInteractWith);
+                float surfaceLeft = position.x - scaleX * 0.5f;
+                float waveLeft = WavePosition - maxSurfaceWidth * 0.5f;
+                float left = Mathf.Max(surfaceLeft, waveLeft);
+                
+                float surfaceRight = position.x + scaleX * 0.5f;
+                float waveRight = WavePosition + maxSurfaceWidth * 0.5f;
+                float right = Mathf.Min(surfaceRight, waveRight);
 
-                for (int i = 0; i < numHits; i++)
+                float surfaceHeight = position.y + scaleY * 0.5f;
+
+                if (left < right)
                 {
-                    var hit = tempLinecastHits[i];
-                    var rig = hit.rigidbody;
-                    if (!rig) continue;
 
-                    var localPoint = hit.point - (Vector2)transform1.position;
-                    var vel = rig.velocity;
+                    Vector2 surfaceLeftWorld = new Vector2(left, surfaceHeight);
+                    Vector2 surfaceRightWorld = new Vector2(right, surfaceHeight);
 
-                    if (!tempInteractionItems.ContainsKey(rig))
+                    // |→|
+                    int numHits = Physics2D.LinecastNonAlloc(surfaceLeftWorld, surfaceRightWorld, tempLinecastHits,
+                        layersToInteractWith);
+
+                    for (int i = 0; i < numHits; i++)
                     {
-                        tempInteractionItems[rig] = new InteractionItem()
-                        {
-                            startPosition = localPoint.x,
-                            endPosition = lossyScale.x * 0.5f,
-                            horizontalVelocity = vel.x,
-                            verticalVelocity = vel.y
-                        };
-                    }
-                }
+                        var hit = tempLinecastHits[i];
+                        var rig = hit.rigidbody;
+                        if (!rig) continue;
 
-                // |←|
-                numHits = Physics2D.LinecastNonAlloc(surfaceRightWorld, surfaceLeftWorld, tempLinecastHits,
-                    layersToInteractWith);
-
-                for (int i = 0; i < numHits; i++)
-                {
-                    var hit = tempLinecastHits[i];
-                    var rig = hit.rigidbody;
-                    if (!rig) continue;
-
-                    var localPoint = hit.point - (Vector2)transform1.position;
-
-                    if (tempInteractionItems.ContainsKey(rig))
-                    {
-                        var old = tempInteractionItems[rig];
-                        old.endPosition = localPoint.x;
-                        tempInteractionItems[rig] = old;
-                    }
-                    else
-                    {
+                        var localPoint = hit.point - (Vector2)transform1.position;
                         var vel = rig.velocity;
 
-                        tempInteractionItems[rig] = new InteractionItem()
+                        if (!tempInteractionItems.ContainsKey(rig))
                         {
-                            startPosition = lossyScale.x * -0.5f,
-                            endPosition = localPoint.x,
-                            horizontalVelocity = vel.x,
-                            verticalVelocity = vel.y
-                        };
+                            tempInteractionItems[rig] = new InteractionItem()
+                            {
+                                startPosition = localPoint.x,
+                                endPosition = lossyScale.x * 0.5f,
+                                horizontalVelocity = vel.x,
+                                verticalVelocity = vel.y
+                            };
+                        }
+                    }
+
+                    // |←|
+                    numHits = Physics2D.LinecastNonAlloc(surfaceRightWorld, surfaceLeftWorld, tempLinecastHits,
+                        layersToInteractWith);
+
+                    for (int i = 0; i < numHits; i++)
+                    {
+                        var hit = tempLinecastHits[i];
+                        var rig = hit.rigidbody;
+                        if (!rig) continue;
+
+                        var localPoint = hit.point - (Vector2)transform1.position;
+
+                        if (tempInteractionItems.ContainsKey(rig))
+                        {
+                            var old = tempInteractionItems[rig];
+                            old.endPosition = localPoint.x;
+                            tempInteractionItems[rig] = old;
+                        }
+                        else
+                        {
+                            var vel = rig.velocity;
+
+                            tempInteractionItems[rig] = new InteractionItem()
+                            {
+                                startPosition = lossyScale.x * -0.5f,
+                                endPosition = localPoint.x,
+                                horizontalVelocity = vel.x,
+                                verticalVelocity = vel.y
+                            };
+                        }
                     }
                 }
             }
@@ -312,12 +335,6 @@ namespace Ruccho
             computeShader.SetFloat(k_WaveConstant2, c * c);
             computeShader.SetFloat(k_Decay, decay);
             computeShader.SetFloat(k_DeltaTime, TimeStep);
-
-            if (scrollToMainCamera)
-            {
-                var cam = Camera.main;
-                if(cam) WavePosition = cam.transform.position.x;
-            }
 
             for (int i = 0; i < numPerform; i++)
             {
