@@ -6,6 +6,6 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Ruccho/Water-RW/Sample/Sample.unity
+    path: Assets/Samples/Sample/Sample.unity
     guid: feb35db4afeace1488e3abe15469e25c
   m_configObjects: {}

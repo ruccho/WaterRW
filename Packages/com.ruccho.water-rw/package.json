@@ -1,0 +1,22 @@
+{
+  "name": "com.ruccho.water-rw",
+  "version": "1.0.0",
+  "displayName": "Water-RW",
+  "description": "2D water system with realtime wave calculation and visual effects",
+  "unity": "2022.3",
+  "unityRelease": "0f1",
+  "dependencies": {
+    "com.unity.burst": "1.8.12",
+    "com.unity.mathematics": "1.2.6"
+  },
+  "author": {
+    "name": "ruccho",
+    "url": "https://ruccho.com"
+  },
+  "samples": [
+    {
+      "displayName": "Prefabs & Samples",
+      "path": "Samples~/Sample"
+    }
+  ]
+}
