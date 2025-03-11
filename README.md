@@ -69,7 +69,7 @@ https://github.com/ruccho/WaterRW.git?path=/Packages/com.ruccho.water-rw
 
 WaterRW uses the shader `Water-RW/With Compute`.
 
-![Image](https://github.com/user-attachments/assets/2b1ca942-90f3-4501-bf06-5c4d0977e604)
+- <img src="https://github.com/user-attachments/assets/2b1ca942-90f3-4501-bf06-5c4d0977e604" height="700">
 
 | Property                          | Type        |                                                                                              |
 | --------------------------------- | ----------- | -------------------------------------------------------------------------------------------- |
