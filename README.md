@@ -46,7 +46,7 @@ https://github.com/ruccho/WaterRW.git?path=/Packages/com.ruccho.water-rw
 
 - Import `Prefabs & Samples` from `Samples` page in Package Manager.
 
-![Image](https://github.com/user-attachments/assets/c985c884-aebc-46f0-ab23-1fd8201bb03d)
+<img src="https://github.com/user-attachments/assets/c985c884-aebc-46f0-ab23-1fd8201bb03d" height="700">
 
 ### 2. Place a prefab
 
@@ -58,10 +58,12 @@ https://github.com/ruccho/WaterRW.git?path=/Packages/com.ruccho.water-rw
   - https://docs.unity3d.com/Packages/com.unity.render-pipelines.universal@16.0/manual/2DRendererData-overview.html
 
 - Enable **Camera Sorting Layer Texture** at the layer you want to reflect and refract.
-  - ![Image](https://github.com/user-attachments/assets/ab5b7b92-2efc-4fce-bd0a-1616f670b871)
+
+  - <img src="https://github.com/user-attachments/assets/ab5b7b92-2efc-4fce-bd0a-1616f670b871" height="700">
   
 - Water-RW has to be rendered after Camera Sorting Layer Texture. Use **Mesh Renderer Sorting** component to configure the sorting layer of a Water-RW instance.
-  - ![Image](https://github.com/user-attachments/assets/5795dc20-d8c6-4f4b-94c5-cdb8b5565477)
+
+  - <img src="https://github.com/user-attachments/assets/5795dc20-d8c6-4f4b-94c5-cdb8b5565477" height="700">
 
 ## ☑️ Material Settings Guide
 
