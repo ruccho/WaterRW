@@ -29,8 +29,8 @@ float _Decay;
 float _DeltaTime;
 
 float _WavePositionLocal;
-int _ScrollDeltaPixelPre;
-int _ScrollDeltaPixel;
+int _SimulationOffsetPrePre;
+int _SimulationOffsetPre;
 
 float interactionDelta(float src, uint index, float widthInUnit, InteractionItem item)
 {
@@ -38,24 +38,22 @@ float interactionDelta(float src, uint index, float widthInUnit, InteractionItem
     float localPosition = unit - (widthInUnit * 0.5 - _WavePositionLocal);
 
     float l = item.endPos - item.startPos;
-    if(l <= 0) return src;
-    
+    if (l <= 0) return src;
+
     float c = item.startPos + l * 0.5;
     float p = (localPosition - c) / l * PI_2;
     float w = sin(p) * item.velX * 0.2 + item.velY * 0.5;
     float m = step(-PI, p) * step(p, PI);
     float d = lerp(src, w, 1.0 - pow(1.0 - 0.1, _DeltaTime * 60.0));
-    
+
     return lerp(src, d, m);
 }
 
 float getWaveValue(RWTexture2D<float> buffer, int pos, uint bufferWidth)
 {
-    int clampedPos = (pos + bufferWidth) % bufferWidth;// clamp(pos, 0, bufferWidth);
+    int clampedPos = clamp(pos, 0, bufferWidth - 1);
     float w = buffer[uint2(clampedPos, 0)];
-    float edge = (0 <= pos && pos < bufferWidth) ? 1 : 0;
-
-    return w * edge;
+    return (0 <= pos && pos < bufferWidth) ? w : 0;
 }
 
 [numthreads(1024,1,1)]
@@ -75,12 +73,12 @@ void Main(uint3 dtid : SV_DispatchThreadID)
     _WaveBufferPrePre.GetDimensions(waveBufferSize, _);
 
     int index = clamp(id, 0, waveBufferSize);
-    
+
     // scroll
-    int index_prepre = id + _ScrollDeltaPixel + _ScrollDeltaPixelPre;
-    int index_pre = id + _ScrollDeltaPixel;
-    int index_l = id - 1 + _ScrollDeltaPixel;
-    int index_r = id + 1 + _ScrollDeltaPixel;
+    int index_prepre = id - _SimulationOffsetPrePre;
+    int index_pre = id - _SimulationOffsetPre;
+    int index_l = id - 1 - _SimulationOffsetPre;
+    int index_r = id + 1 - _SimulationOffsetPre;
 
     float c_prepre = getWaveValue(_WaveBufferPrePre, index_prepre, waveBufferSize);
 
@@ -101,7 +99,6 @@ void Main(uint3 dtid : SV_DispatchThreadID)
         InteractionItem item = _InteractionBuffer[i];
 
         w = interactionDelta(w, id, widthInUnit, item);
-        
     }
 
     _WaveBufferDest[uint2(index, 0)] = w;

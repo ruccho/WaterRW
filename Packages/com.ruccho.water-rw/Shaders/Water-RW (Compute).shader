@@ -31,9 +31,11 @@
         _SurfaceColor("Surface Color", Color) = (0.43,0.48,0.62, 1.0)
         _SurfaceWidth("Surface Width in Pixel", Float) = 4
         _FadeDistance("Fade Distance in Viewport Space", Float) = 128
-        
+
         _SmoothBufferEdge("Smooth Buffer Edge in World Space", Float) = 0.5
         _WavePositionLocal("Scrolled Position", Float) = 0
+
+        _Reflection("Reflection Intensity", Range(0, 1)) = 1.0
     }
 
     SubShader
@@ -47,9 +49,6 @@
             "CanUseSpriteAtlas"="True"
         }
 
-        GrabPass
-        {
-        }
         Cull Off
         Lighting Off
         ZWrite Off
@@ -70,8 +69,8 @@
             float4 _MainTex_TexelSize;
             float _WaveBufferPixelsPerUnit;
 
-            sampler2D _GrabTexture;
-            float4 _GrabTexture_TexelSize;
+            sampler2D _CameraSortingLayerTexture;
+            float4 _CameraSortingLayerTexture_TexelSize;
 
             sampler2D _NormalA;
             float4 _NormalA_ST;
@@ -99,6 +98,8 @@
 
             float _SmoothBufferEdge;
             float _WavePositionLocal;
+
+            float _Reflection;
 
             struct v2f_custom
             {
@@ -134,15 +135,15 @@
                 objectToWorldScale._m23 = 0;
 
                 float bufferWidth = _MainTex_TexelSize.z;
-                
+
                 float3 posWorldScale = mul(objectToWorldScale, v).xyz;
-                
+
                 // [-scale*0.5, scale*0.5] [-maxWidth*0.5, maxWidth*0.5]
                 float posWorld = posWorldScale.x - _WavePositionLocal;
                 float posInPixel = posWorld * _WaveBufferPixelsPerUnit + bufferWidth * 0.5; // [0, bufferSize]
 
                 float posInUv = posInPixel / bufferWidth;
-                
+
                 float4 wave = tex2Dlod(_MainTex, float4(posInUv, 0, 0, 0));
 
                 // hide area out of bounds
@@ -185,6 +186,7 @@
                 float2 fragPosViewport = IN.screen.xy / IN.screen.w;
                 float reflectedPosViewport = 2 * surfacePosViewport - fragPosViewport.y;
                 float2 reflectedPos = float2(fragPosViewport.x, reflectedPosViewport);
+                float2 refractedPos = fragPosViewport;
 
                 // fade by distance
                 float distFade = saturate(min(1, (1 - reflectedPos.y) / min(_FadeDistance, 1 - surfacePosViewport)));
@@ -195,6 +197,7 @@
                     * (_WaveSize * 0.5) * pow(wave, 2);
 
                 reflectedPos.x += deltaWave;
+                refractedPos.x += -deltaWave;
 
                 // distortion by normal maps
 
@@ -212,6 +215,7 @@
                 deltaNormal += texNormalB * _NormalBAmount;
 
                 reflectedPos += deltaNormal;
+                refractedPos += -deltaNormal;
 
                 // surface line
                 float surfaceWidthScreen = _SurfaceWidth / _ScreenParams.y;
@@ -220,17 +224,17 @@
 
                 // remove vertical flip of ComputeScreenPos
                 reflectedPos.y = ((reflectedPos.y * 2 - 1) * _ProjectionParams.x) * 0.5 + 0.5;
-                fragPosViewport.y = ((fragPosViewport.y * 2 - 1) * _ProjectionParams.x) * 0.5 + 0.5;
+                refractedPos.y = ((refractedPos.y * 2 - 1) * _ProjectionParams.x) * 0.5 + 0.5;
 
                 // flip for grabpass
                 #if UNITY_UV_STARTS_AT_TOP
                 reflectedPos.y = 1 - reflectedPos.y;
-                fragPosViewport.y = 1 - fragPosViewport.y;
+                refractedPos.y = 1 - refractedPos.y;
                 #endif
 
 
-                fixed4 bg = tex2D(_GrabTexture, fragPosViewport);
-                fixed4 col = tex2D(_GrabTexture, reflectedPos);
+                fixed4 bg = tex2D(_CameraSortingLayerTexture, refractedPos);
+                fixed4 col = tex2D(_CameraSortingLayerTexture, reflectedPos) * _Reflection;
 
                 // hide clamped area of grabtex
                 col.rgb *= step(reflectedPos.y, 1) * step(0, reflectedPos.y);

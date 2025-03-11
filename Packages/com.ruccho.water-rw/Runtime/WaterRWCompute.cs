@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Unity.Burst;
@@ -16,121 +15,85 @@ namespace Ruccho
     [RequireComponent(typeof(MeshRenderer), typeof(MeshFilter))]
     public class WaterRWCompute : MonoBehaviour
     {
-        #region Static Members
-
         private static readonly int NumComputeThreads = 1024;
 
-        #endregion
-
-        #region References
-
-        [SerializeField, Header("References")] private MeshFilter meshFilter = default;
-        [SerializeField] private ComputeShader computeShader = default;
-
-        #endregion
-
-        #region Parameters
+        [SerializeField, Header("References")] private MeshFilter meshFilter;
+        [SerializeField] private ComputeShader computeShader;
 
         [SerializeField, Header("Mesh"), Min(0.001f)]
         private float meshSegmentsPerUnit = 16f;
 
-        [SerializeField, Header("Wave Calculation")]
-        private UpdateModeType updateMode = UpdateModeType.FixedUpdate;
+        [SerializeField, Header("Simulation")] private UpdateModeType updateMode = UpdateModeType.FixedUpdate;
 
-        [SerializeField] private bool overrideFixedTimeStep = false;
+        [SerializeField] private bool overrideFixedTimeStep;
         [SerializeField] private float fixedTimeStep = 0.02f;
+        [SerializeField] private bool updateWhenPaused = true;
 
         [SerializeField, Range(0.05f, 0.95f)] private float c = 0.1f;
-        [SerializeField, Range(0f, 1f)] private float decay = default;
+        [SerializeField, Range(0f, 1f)] private float decay;
         [SerializeField] private bool enableInteraction = true;
         [SerializeField] private LayerMask layersToInteractWith = 1;
         [SerializeField, Min(0.0001f)] private float spatialScale = 1f;
 
         [SerializeField] private int maxInteractionItems = 16;
         [SerializeField, Min(0.0001f)] private float waveBufferPixelsPerUnit = 4f;
-        
+
         [SerializeField] public bool scrollToMainCamera = true;
+        [SerializeField] private float flowVelocity;
 
-        /// <summary>
-        /// Max width of wave area to be calculated (in world space).
-        /// </summary>
-        [SerializeField, Min(1f), FormerlySerializedAs("maxWaveWidth")] private int maxSurfaceWidth = 256;
-        
-        [SerializeField, Header("Debug")] private bool viewWaveBuffer = false;
-        [SerializeField] private bool printItems = false;
+        [SerializeField, Min(1f), FormerlySerializedAs("maxWaveWidth")]
+        private int maxSurfaceWidth = 256;
 
-        #endregion
+        private ComputeBuffer interactionBuffer;
 
-        #region Variables
+        private int currentBuffer;
+        private WaveBuffer[] waveBuffers;
 
-        private ComputeBuffer interactionBuffer = default;
-        private RenderTexture waveBufferA = default;
-        private RenderTexture waveBufferB = default;
-        private RenderTexture waveBufferC = default;
-        
-        private int currentBuffer = 0;
+        private ref WaveBuffer WaveBufferPrePre => ref waveBuffers[currentBuffer % 3];
+        private ref WaveBuffer WaveBufferPre => ref waveBuffers[(currentBuffer + 1) % 3];
+        private ref WaveBuffer WaveBufferDest => ref waveBuffers[(currentBuffer + 2) % 3];
 
-        private RenderTexture WaveBufferPrePre =>
-            currentBuffer == 0 ? waveBufferA : (currentBuffer == 1 ? waveBufferB : waveBufferC);
-        private RenderTexture WaveBufferPre =>
-            currentBuffer == 0 ? waveBufferB : (currentBuffer == 1 ? waveBufferC : waveBufferA);
-        private RenderTexture WaveBufferDest =>
-            currentBuffer == 0 ? waveBufferC : (currentBuffer == 1 ? waveBufferA : waveBufferB);
 
-        private void NextBuffer() => currentBuffer = (currentBuffer + 1) % 3;
-        
+        private int numInteractionItems;
+        private InteractionItem[] interactionItems;
+        private RaycastHit2D[] tempLinecastHits;
 
-        private int waveBufferSizeInPixels = 0;
+        private int? kernelIndex;
+        private readonly int kInteractionBuffer = Shader.PropertyToID("_InteractionBuffer");
+        private readonly int kNumInteractionItems = Shader.PropertyToID("_NumInteractionItems");
 
-        private int numInteractionItems = 0;
-        private InteractionItem[] interactionItems = default;
-        private RaycastHit2D[] tempLinecastHits = default;
+        private readonly int kWaveBufferPixelsPerUnit = Shader.PropertyToID("_WaveBufferPixelsPerUnit");
+        private readonly int kWaveBufferPrePre = Shader.PropertyToID("_WaveBufferPrePre");
+        private readonly int kWaveBufferPre = Shader.PropertyToID("_WaveBufferPre");
+        private readonly int kWaveBufferDest = Shader.PropertyToID("_WaveBufferDest");
 
-        private int? kernelIndex = default;
-        private int k_InteractionBuffer = Shader.PropertyToID("_InteractionBuffer");
-        private int k_NumInteractionItems = Shader.PropertyToID("_NumInteractionItems");
+        private readonly int kSpatialScale = Shader.PropertyToID("_SpatialScale");
+        private readonly int kWaveConstant2 = Shader.PropertyToID("_WaveConstant2");
+        private readonly int kDecay = Shader.PropertyToID("_Decay");
+        private readonly int kDeltaTime = Shader.PropertyToID("_DeltaTime");
 
-        private int k_WaveBufferPixelsPerUnit = Shader.PropertyToID("_WaveBufferPixelsPerUnit");
-        private int k_WaveBufferPrePre = Shader.PropertyToID("_WaveBufferPrePre");
-        private int k_WaveBufferPre = Shader.PropertyToID("_WaveBufferPre");
-        private int k_WaveBufferDest = Shader.PropertyToID("_WaveBufferDest");
+        private readonly int kWavePositionLocal = Shader.PropertyToID("_WavePositionLocal");
+        private readonly int kSimulationOffsetPrePre = Shader.PropertyToID("_SimulationOffsetPrePre");
+        private readonly int kSimulationOffsetPre = Shader.PropertyToID("_SimulationOffsetPre");
 
-        private int k_SpatialScale = Shader.PropertyToID("_SpatialScale");
-        private int k_WaveConstant2 = Shader.PropertyToID("_WaveConstant2");
-        private int k_Decay = Shader.PropertyToID("_Decay");
-        private int k_DeltaTime = Shader.PropertyToID("_DeltaTime");
-        
-        private int k_WavePositionLocal = Shader.PropertyToID("_WavePositionLocal");
-        private int k_ScrollDeltaPixelPre = Shader.PropertyToID("_ScrollDeltaPixelPre");
-        private int k_ScrollDeltaPixel = Shader.PropertyToID("_ScrollDeltaPixel");
+        private float stackedDeltaTime;
 
-        private float stackedDeltaTime = 0f;
+        private readonly Dictionary<object, InteractionItem> tempInteractionItems = new();
 
-        private readonly Dictionary<Rigidbody2D, InteractionItem> tempInteractionItems =
-            new Dictionary<Rigidbody2D, InteractionItem>();
+        private NativeArray<Vertex> vertexBuffer;
+        private NativeArray<IndexSegment> indexBuffer;
+        private int currentSegments;
+        private Mesh mesh;
 
-        private NativeArray<Vertex> vertexBuffer = default;
-        private NativeArray<IndexSegment> indexBuffer = default;
-        private int currentSegments = 0;
-        private Mesh mesh = default;
-
-        private MeshRenderer meshRenderer = default;
-        private Material material = default;
+        private MeshRenderer meshRenderer;
+        private Material material;
 
         public float WavePosition { get; set; }
-        private float scrolledPosition = default;
-        private int tempScrollDeltaPixel = 0;
 
         private float TimeStep => overrideFixedTimeStep ? fixedTimeStep : Time.fixedDeltaTime;
 
-        #endregion
+        private void NextBuffer() => currentBuffer = (currentBuffer + 1) % 3;
 
-        public enum UpdateModeType
-        {
-            FixedUpdate,
-            Update
-        }
-        
         private void Reset()
         {
             meshFilter = GetComponent<MeshFilter>();
@@ -138,7 +101,7 @@ namespace Ruccho
 
         private void Start()
         {
-            WavePosition = scrolledPosition = transform.position.x;
+            WavePosition = transform.position.x;
         }
 
         private void FixedUpdate()
@@ -150,20 +113,25 @@ namespace Ruccho
 
         private void Update()
         {
-            if (updateMode != UpdateModeType.Update) return;
-            
-            UpdateWave(Time.deltaTime);
+            if (updateMode == UpdateModeType.Update)
+            {
+                UpdateWave(Time.deltaTime);
+            }
+            else if (updateWhenPaused && Time.timeScale == 0)
+            {
+                UpdateWave(Time.unscaledDeltaTime);
+            }
         }
 
         private void UpdateWave(float deltaTime)
         {
             if (!meshFilter) meshFilter = GetComponent<MeshFilter>();
             if (!meshFilter) return;
-            
+
             stackedDeltaTime += deltaTime;
             int numPerform = Mathf.FloorToInt(stackedDeltaTime / TimeStep);
-            stackedDeltaTime %= TimeStep;
-            
+            stackedDeltaTime -= numPerform * TimeStep;
+
             UpdateWave(numPerform);
         }
 
@@ -174,10 +142,10 @@ namespace Ruccho
             if (meshRenderer == null) meshRenderer = GetComponent<MeshRenderer>();
             if (material == null) material = meshRenderer.material;
 
-            if (interactionItems == null) interactionItems = new InteractionItem[maxInteractionItems];
-            if (tempLinecastHits == null) tempLinecastHits = new RaycastHit2D[maxInteractionItems * 2];
+            interactionItems ??= new InteractionItem[maxInteractionItems];
+            tempLinecastHits ??= new RaycastHit2D[maxInteractionItems * 2];
 
-            if (!kernelIndex.HasValue) kernelIndex = computeShader.FindKernel("Main");
+            kernelIndex ??= computeShader.FindKernel("Main");
 
             if (interactionBuffer == null)
             {
@@ -185,34 +153,25 @@ namespace Ruccho
                 interactionBuffer = new ComputeBuffer(interactionItems.Length, Marshal.SizeOf<InteractionItem>());
             }
 
-            if (waveBufferSizeInPixels == 0)
-                waveBufferSizeInPixels = Mathf.RoundToInt(waveBufferPixelsPerUnit * maxSurfaceWidth);
-
-            if (waveBufferA == null)
-            {
-                waveBufferA = new RenderTexture(waveBufferSizeInPixels, 1, 0, GraphicsFormat.R32_SFloat);
-                waveBufferA.enableRandomWrite = true;
-                waveBufferA.Create();
-            }
-
-            if (waveBufferB == null)
-            {
-                waveBufferB = new RenderTexture(waveBufferSizeInPixels, 1, 0, GraphicsFormat.R32_SFloat);
-                waveBufferB.enableRandomWrite = true;
-                waveBufferB.Create();
-            }
-
-            if (waveBufferC == null)
-            {
-                waveBufferC = new RenderTexture(waveBufferSizeInPixels, 1, 0, GraphicsFormat.R32_SFloat);
-                waveBufferC.enableRandomWrite = true;
-                waveBufferC.Create();
-            }
+            var waveBufferSizeInPixels = Mathf.RoundToInt(waveBufferPixelsPerUnit * maxSurfaceWidth);
 
             if (scrollToMainCamera)
             {
                 var cam = Camera.main;
-                if(cam) WavePosition = cam.transform.position.x;
+                if (cam) WavePosition = cam.transform.position.x;
+            }
+
+            if (waveBuffers == null)
+            {
+                waveBuffers = new WaveBuffer[3];
+                for (int i = 0; i < 3; i++)
+                {
+                    waveBuffers[i] = new WaveBuffer(waveBufferSizeInPixels)
+                    {
+                        simulationPosition = 0,
+                        worldPosition = WavePosition
+                    };
+                }
             }
 
             tempInteractionItems.Clear();
@@ -224,41 +183,53 @@ namespace Ruccho
                 var transform1 = transform;
                 var position = transform1.position;
                 var lossyScale = transform1.lossyScale;
-                float scaleX = Mathf.Abs(lossyScale.x);
-                float scaleY = Mathf.Abs(lossyScale.y);
-                
-                float surfaceLeft = position.x - scaleX * 0.5f;
-                float waveLeft = WavePosition - maxSurfaceWidth * 0.5f;
-                float left = Mathf.Max(surfaceLeft, waveLeft);
-                
-                float surfaceRight = position.x + scaleX * 0.5f;
-                float waveRight = WavePosition + maxSurfaceWidth * 0.5f;
-                float right = Mathf.Min(surfaceRight, waveRight);
+                var scaleX = Mathf.Abs(lossyScale.x);
+                var scaleY = Mathf.Abs(lossyScale.y);
 
-                float surfaceHeight = position.y + scaleY * 0.5f;
+                var surfaceLeft = position.x - scaleX * 0.5f;
+                var waveLeft = WavePosition - maxSurfaceWidth * 0.5f;
+                var left = Mathf.Max(surfaceLeft, waveLeft);
+
+                var surfaceRight = position.x + scaleX * 0.5f;
+                var waveRight = WavePosition + maxSurfaceWidth * 0.5f;
+                var right = Mathf.Min(surfaceRight, waveRight);
+
+                var surfaceHeight = position.y + scaleY * 0.5f;
 
                 if (left < right)
                 {
-
                     Vector2 surfaceLeftWorld = new Vector2(left, surfaceHeight);
                     Vector2 surfaceRightWorld = new Vector2(right, surfaceHeight);
 
                     // |→|
-                    int numHits = Physics2D.LinecastNonAlloc(surfaceLeftWorld, surfaceRightWorld, tempLinecastHits,
-                        layersToInteractWith);
+                    var numHits = Physics2D.Linecast(surfaceLeftWorld, surfaceRightWorld,
+                        new ContactFilter2D
+                            { layerMask = layersToInteractWith, useLayerMask = true, useTriggers = true },
+                        tempLinecastHits);
 
-                    for (int i = 0; i < numHits; i++)
+                    for (var i = 0; i < numHits; i++)
                     {
                         var hit = tempLinecastHits[i];
                         var rig = hit.rigidbody;
-                        if (!rig) continue;
+                        object key;
+                        Vector2 vel;
+                        if (rig)
+                        {
+                            key = rig;
+                            vel = rig.velocity;
+                        }
+                        else
+                        {
+                            if (!hit.transform.TryGetComponent(out IWaterRWInteractionProvider provider)) return;
+                            key = provider;
+                            vel = provider.Velocity;
+                        }
 
                         var localPoint = hit.point - (Vector2)transform1.position;
-                        var vel = rig.velocity;
 
-                        if (!tempInteractionItems.ContainsKey(rig))
+                        if (!tempInteractionItems.ContainsKey(key))
                         {
-                            tempInteractionItems[rig] = new InteractionItem()
+                            tempInteractionItems[key] = new InteractionItem()
                             {
                                 startPosition = localPoint.x,
                                 endPosition = lossyScale.x * 0.5f,
@@ -269,28 +240,40 @@ namespace Ruccho
                     }
 
                     // |←|
-                    numHits = Physics2D.LinecastNonAlloc(surfaceRightWorld, surfaceLeftWorld, tempLinecastHits,
-                        layersToInteractWith);
+                    numHits = Physics2D.Linecast(surfaceRightWorld, surfaceLeftWorld,
+                        new ContactFilter2D
+                            { layerMask = layersToInteractWith, useLayerMask = true, useTriggers = true },
+                        tempLinecastHits);
 
                     for (int i = 0; i < numHits; i++)
                     {
                         var hit = tempLinecastHits[i];
                         var rig = hit.rigidbody;
-                        if (!rig) continue;
-
-                        var localPoint = hit.point - (Vector2)transform1.position;
-
-                        if (tempInteractionItems.ContainsKey(rig))
+                        object key;
+                        Vector2 vel;
+                        if (rig)
                         {
-                            var old = tempInteractionItems[rig];
-                            old.endPosition = localPoint.x;
-                            tempInteractionItems[rig] = old;
+                            key = rig;
+                            vel = rig.velocity;
                         }
                         else
                         {
-                            var vel = rig.velocity;
+                            if (!hit.transform.TryGetComponent(out IWaterRWInteractionProvider provider)) return;
+                            key = provider;
+                            vel = provider.Velocity;
+                        }
 
-                            tempInteractionItems[rig] = new InteractionItem()
+                        var localPoint = hit.point - (Vector2)transform1.position;
+
+                        if (tempInteractionItems.ContainsKey(key))
+                        {
+                            var old = tempInteractionItems[key];
+                            old.endPosition = localPoint.x;
+                            tempInteractionItems[key] = old;
+                        }
+                        else
+                        {
+                            tempInteractionItems[key] = new InteractionItem()
                             {
                                 startPosition = lossyScale.x * -0.5f,
                                 endPosition = localPoint.x,
@@ -301,17 +284,6 @@ namespace Ruccho
                     }
                 }
             }
-
-            if (printItems && tempInteractionItems.Count > 0)
-            {
-                Debug.Log($"{tempInteractionItems.Count} ITEMS");
-                foreach (var item in tempInteractionItems)
-                {
-                    var v = item.Value;
-                    Debug.Log($"{v.startPosition}, {v.endPosition}, {v.horizontalVelocity}, {v.verticalVelocity}");
-                }
-            }
-            
 
             numInteractionItems = Mathf.Min(interactionItems.Length, tempInteractionItems.Count);
 
@@ -328,41 +300,50 @@ namespace Ruccho
             // Compute
 
             interactionBuffer.SetData(interactionItems);
-            computeShader.SetBuffer(kernelIndex.Value, k_InteractionBuffer, interactionBuffer);
-            computeShader.SetInt(k_NumInteractionItems, numInteractionItems);
-            computeShader.SetFloat(k_WaveBufferPixelsPerUnit, waveBufferPixelsPerUnit);
-            computeShader.SetFloat(k_SpatialScale, spatialScale);
-            computeShader.SetFloat(k_WaveConstant2, c * c);
-            computeShader.SetFloat(k_Decay, decay);
-            computeShader.SetFloat(k_DeltaTime, TimeStep);
+            computeShader.SetBuffer(kernelIndex.Value, kInteractionBuffer, interactionBuffer);
+            computeShader.SetInt(kNumInteractionItems, numInteractionItems);
+            computeShader.SetFloat(kWaveBufferPixelsPerUnit, waveBufferPixelsPerUnit);
+            computeShader.SetFloat(kSpatialScale, spatialScale);
+            computeShader.SetFloat(kWaveConstant2, c * c);
+            computeShader.SetFloat(kDecay, decay);
+            computeShader.SetFloat(kDeltaTime, TimeStep);
 
             for (int i = 0; i < numPerform; i++)
             {
-                float deltaPosition = WavePosition - scrolledPosition;
+                ref var prePre = ref WaveBufferPrePre;
+                ref var pre = ref WaveBufferPre;
+                ref var dest = ref WaveBufferDest;
 
-                float deltaPixels = deltaPosition * waveBufferPixelsPerUnit;
-                int deltaPixelsSnapped = (int)Mathf.Sign(deltaPixels) * Mathf.FloorToInt(Mathf.Abs(deltaPixels));
+                // Determine current buffer positions.
+                // Simulation pixels should be snapped to the nearest integer.
+                var expectedWorldPosition = WavePosition;
+                var deltaFlow = -TimeStep * flowVelocity;
+                var expectedDeltaWorldPosition = expectedWorldPosition - pre.worldPosition;
+                var deltaSimulationPositionUnit = deltaFlow + expectedDeltaWorldPosition;
+                var deltaSimulationPosition = deltaSimulationPositionUnit * waveBufferPixelsPerUnit;
+                var deltaSimulationPositionRounded = Mathf.RoundToInt(deltaSimulationPosition);
+                var deltaSimulationPositionRoundedUnit =
+                    deltaSimulationPositionRounded / waveBufferPixelsPerUnit;
+                var actualDeltaWorldPosition = deltaSimulationPositionRoundedUnit - deltaFlow;
+                var actualWorldPosition = actualDeltaWorldPosition + pre.worldPosition;
 
-                scrolledPosition += deltaPixelsSnapped / waveBufferPixelsPerUnit;
+                dest.worldPosition = actualWorldPosition;
+                dest.simulationPosition = pre.simulationPosition + deltaSimulationPositionRounded;
 
-                int scrollDeltaPixel = deltaPixelsSnapped;
-                int scrollDeltaPixelPre = tempScrollDeltaPixel;
-                tempScrollDeltaPixel = scrollDeltaPixel;
-                
-                computeShader.SetFloat(k_WavePositionLocal, scrolledPosition - transform.position.x);
-                computeShader.SetInt(k_ScrollDeltaPixelPre, scrollDeltaPixelPre);
-                computeShader.SetInt(k_ScrollDeltaPixel, scrollDeltaPixel);
-                computeShader.SetTexture(kernelIndex.Value, k_WaveBufferPrePre, WaveBufferPrePre);
-                computeShader.SetTexture(kernelIndex.Value, k_WaveBufferPre, WaveBufferPre);
-                computeShader.SetTexture(kernelIndex.Value, k_WaveBufferDest, WaveBufferDest);
+                computeShader.SetFloat(kWavePositionLocal, actualWorldPosition - transform.position.x);
+                computeShader.SetInt(kSimulationOffsetPrePre, prePre.simulationPosition - dest.simulationPosition);
+                computeShader.SetInt(kSimulationOffsetPre, pre.simulationPosition - dest.simulationPosition);
+                computeShader.SetTexture(kernelIndex.Value, kWaveBufferPrePre, WaveBufferPrePre.Buffer);
+                computeShader.SetTexture(kernelIndex.Value, kWaveBufferPre, WaveBufferPre.Buffer);
+                computeShader.SetTexture(kernelIndex.Value, kWaveBufferDest, WaveBufferDest.Buffer);
                 NextBuffer();
 
-                int numGroups = Mathf.CeilToInt((float) waveBufferSizeInPixels / NumComputeThreads);
+                int numGroups = Mathf.CeilToInt((float)waveBufferSizeInPixels / NumComputeThreads);
                 computeShader.Dispatch(kernelIndex.Value, numGroups, 1, 1);
             }
 
-            material.mainTexture = WaveBufferPre;
-            material.SetFloat(k_WavePositionLocal, WavePosition - transform.position.x);
+            material.mainTexture = WaveBufferPre.Buffer;
+            material.SetFloat(kWavePositionLocal, WaveBufferPre.worldPosition - transform.position.x);
 
             // Mesh
 
@@ -373,7 +354,7 @@ namespace Ruccho
             }
 
             float width = Mathf.Abs(transform.lossyScale.x);
-            int groups = Mathf.Max(1, (int) (width * meshSegmentsPerUnit) / 4);
+            int groups = Mathf.Max(1, (int)(width * meshSegmentsPerUnit) / 4);
             int segments = groups * 4;
             if (currentSegments != segments)
             {
@@ -424,7 +405,7 @@ namespace Ruccho
                 currentSegments = segments;
             }
 
-            material.SetFloat(k_WaveBufferPixelsPerUnit, waveBufferPixelsPerUnit);
+            material.SetFloat(kWaveBufferPixelsPerUnit, waveBufferPixelsPerUnit);
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -459,8 +440,8 @@ namespace Ruccho
         [BurstCompile]
         struct VertexConstructionJob : IJobParallelFor
         {
-            NativeArray<Vertex> vertexBuffer;
-            int segments;
+            private NativeArray<Vertex> vertexBuffer;
+            private readonly int segments;
 
             public VertexConstructionJob(NativeArray<Vertex> vertexBuffer, int segments)
             {
@@ -470,7 +451,7 @@ namespace Ruccho
 
             public void Execute(int i)
             {
-                float x = (float) (i / 2) / segments;
+                float x = (float)(i / 2) / segments;
                 float y = i % 2 == 0 ? 0 : 1;
                 vertexBuffer[i] = new Vertex(new float2(x - 0.5f, y - 0.5f), new float2(x, y));
             }
@@ -489,7 +470,7 @@ namespace Ruccho
             public void Execute(int i)
             {
                 int seg = i;
-                uint baseIndex = (uint) seg * 2;
+                uint baseIndex = (uint)seg * 2;
 
                 indexBuffer[i] = new IndexSegment(
                     baseIndex,
@@ -507,6 +488,11 @@ namespace Ruccho
             interactionBuffer?.Release();
             if (vertexBuffer.IsCreated) vertexBuffer.Dispose();
             if (indexBuffer.IsCreated) indexBuffer.Dispose();
+
+            for (var i = 0; i < waveBuffers.Length; i++)
+            {
+                waveBuffers[i].Dispose();
+            }
         }
 
         private void OnDrawGizmos()
@@ -516,24 +502,17 @@ namespace Ruccho
             {
                 var item = interactionItems[i];
 
-                Vector2 p0 = (Vector2) transform.position +
+                Vector2 p0 = (Vector2)transform.position +
                              new Vector2(item.startPosition, transform.lossyScale.y * 0.5f - 0.5f);
-                Vector2 p1 = (Vector2) transform.position +
+                Vector2 p1 = (Vector2)transform.position +
                              new Vector2(item.endPosition, transform.lossyScale.y * 0.5f - 0.5f);
 
                 Gizmos.DrawLine(p0, p1);
             }
-            
-            // surface
-            Gizmos.DrawWireCube(new Vector2(WavePosition, transform.position.y), new Vector3(maxSurfaceWidth, transform.lossyScale.y, 0));
-            
-        }
 
-        private void OnGUI()
-        {
-            if (!viewWaveBuffer) return;
-            if (!WaveBufferPre) return;
-            GUI.DrawTexture(new Rect(0, 0, 1024, 20), WaveBufferPre, ScaleMode.StretchToFill, false);
+            // surface
+            Gizmos.DrawWireCube(new Vector2(WavePosition, transform.position.y),
+                new Vector3(maxSurfaceWidth, transform.lossyScale.y, 0));
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -544,7 +523,7 @@ namespace Ruccho
             public float horizontalVelocity;
             public float verticalVelocity;
 
-            public bool Equals(InteractionItem other)
+            private bool Equals(InteractionItem other)
             {
                 return startPosition.Equals(other.startPosition) && endPosition.Equals(other.endPosition) &&
                        horizontalVelocity.Equals(other.horizontalVelocity) &&
@@ -566,6 +545,36 @@ namespace Ruccho
                     hashCode = (hashCode * 397) ^ verticalVelocity.GetHashCode();
                     return hashCode;
                 }
+            }
+        }
+
+        private enum UpdateModeType
+        {
+            FixedUpdate,
+            Update
+        }
+
+        private struct WaveBuffer : IDisposable
+        {
+            public RenderTexture Buffer { get; private set; }
+
+            public float worldPosition;
+
+            public int simulationPosition;
+
+            public WaveBuffer(int length) : this()
+            {
+                Buffer = new RenderTexture(length, 1, 0, GraphicsFormat.R32_SFloat)
+                {
+                    enableRandomWrite = true
+                };
+                Buffer.Create();
+            }
+
+            public void Dispose()
+            {
+                Destroy(Buffer);
+                Buffer = default;
             }
         }
     }
