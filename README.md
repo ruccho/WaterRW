@@ -46,7 +46,7 @@ https://github.com/ruccho/WaterRW.git?path=/Packages/com.ruccho.water-rw
 
 - Import `Prefabs & Samples` from `Samples` page in Package Manager.
 
-<img src="https://github.com/user-attachments/assets/c985c884-aebc-46f0-ab23-1fd8201bb03d" height="700">
+![](https://github.com/user-attachments/assets/c985c884-aebc-46f0-ab23-1fd8201bb03d)
 
 ### 2. Place a prefab
 
