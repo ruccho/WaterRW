@@ -102,8 +102,9 @@ MonoBehaviour:
   updateMode: 0
   overrideFixedTimeStep: 0
   fixedTimeStep: 0.01
+  updateWhenPaused: 1
   c: 0.8
-  decay: 0.852
+  decay: 0.7
   enableInteraction: 1
   layersToInteractWith:
     serializedVersion: 2
@@ -112,6 +113,5 @@ MonoBehaviour:
   maxInteractionItems: 32
   waveBufferPixelsPerUnit: 4
   scrollToMainCamera: 1
+  flowVelocity: 0
   maxSurfaceWidth: 20
-  viewWaveBuffer: 0
-  printItems: 0

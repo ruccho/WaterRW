@@ -198,8 +198,8 @@ namespace Ruccho
 
                 if (left < right)
                 {
-                    Vector2 surfaceLeftWorld = new Vector2(left, surfaceHeight);
-                    Vector2 surfaceRightWorld = new Vector2(right, surfaceHeight);
+                    var surfaceLeftWorld = new Vector2(left, surfaceHeight);
+                    var surfaceRightWorld = new Vector2(right, surfaceHeight);
 
                     // |→|
                     var numHits = Physics2D.Linecast(surfaceLeftWorld, surfaceRightWorld,
@@ -220,7 +220,7 @@ namespace Ruccho
                         }
                         else
                         {
-                            if (!hit.transform.TryGetComponent(out IWaterRWInteractionProvider provider)) return;
+                            if (!hit.transform.TryGetComponent(out IWaterRWInteractionProvider provider)) continue;
                             key = provider;
                             vel = provider.Velocity;
                         }
@@ -258,7 +258,7 @@ namespace Ruccho
                         }
                         else
                         {
-                            if (!hit.transform.TryGetComponent(out IWaterRWInteractionProvider provider)) return;
+                            if (!hit.transform.TryGetComponent(out IWaterRWInteractionProvider provider)) continue;
                             key = provider;
                             vel = provider.Velocity;
                         }
