@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 
-namespace Ruccho.Utilities
+namespace Ruccho.WaterRW.Utilities
 {
     [CustomEditor(typeof(MeshRendererSorting))]
     internal class MeshRendererSortingEditor : Editor

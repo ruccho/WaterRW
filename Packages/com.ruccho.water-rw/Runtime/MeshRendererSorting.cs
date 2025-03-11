@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Ruccho.Utilities
+namespace Ruccho.WaterRW.Utilities
 {
     public class MeshRendererSorting : MonoBehaviour
     {

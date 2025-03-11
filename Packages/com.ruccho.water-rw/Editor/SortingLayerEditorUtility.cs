@@ -3,7 +3,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
-namespace Ruccho.Utilities
+namespace Ruccho.WaterRW.Utilities
 {
     internal static class SortingLayerEditorUtility
     {
