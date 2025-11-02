@@ -1,6 +1,6 @@
 {
   "name": "com.ruccho.water-rw",
-  "version": "1.0.1",
+  "version": "1.2.0",
   "displayName": "Water-RW",
   "description": "2D water system with realtime wave calculation and visual effects",
   "unity": "2022.3",
