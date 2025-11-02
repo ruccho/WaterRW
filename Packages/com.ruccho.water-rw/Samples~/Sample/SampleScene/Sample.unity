@@ -38,7 +38,6 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0, g: 0, b: 0, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -906,12 +905,12 @@ MonoBehaviour:
   m_RequiresColorTexture: 0
   m_Version: 2
   m_TaaSettings:
-    quality: 3
-    frameInfluence: 0.1
-    jitterScale: 1
-    mipBias: 0
-    varianceClampScale: 0.9
-    contrastAdaptiveSharpening: 0
+    m_Quality: 3
+    m_FrameInfluence: 0.1
+    m_JitterScale: 1
+    m_MipBias: 0
+    m_VarianceClampScale: 0.9
+    m_ContrastAdaptiveSharpening: 0
 --- !u!1 &524190118
 GameObject:
   m_ObjectHideFlags: 0
@@ -1443,18 +1442,6 @@ BoxCollider2D:
   serializedVersion: 2
   m_Size: {x: 1, y: 1}
   m_EdgeRadius: 0
---- !u!114 &863594096
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 863594085}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ffeb0e6edb47e674d978addbc82521f3, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!1 &1266722773
 GameObject:
   m_ObjectHideFlags: 0
@@ -2642,6 +2629,11 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 465085849670155082, guid: 5df8722b9653c164fa2ab75d6189be3a,
         type: 3}
+      propertyPath: flowVelocity
+      value: 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 465085849670155082, guid: 5df8722b9653c164fa2ab75d6189be3a,
+        type: 3}
       propertyPath: maxWaveWidth
       value: 5
       objectReference: {fileID: 0}
@@ -2737,10 +2729,6 @@ PrefabInstance:
         type: 3}
       insertIndex: -1
       addedObject: {fileID: 863594090}
-    - targetCorrespondingSourceObject: {fileID: 2933080294895812739, guid: 5df8722b9653c164fa2ab75d6189be3a,
-        type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 863594096}
   m_SourcePrefab: {fileID: 100100000, guid: 5df8722b9653c164fa2ab75d6189be3a, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

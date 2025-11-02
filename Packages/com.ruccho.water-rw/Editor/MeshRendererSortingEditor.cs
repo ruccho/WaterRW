@@ -14,7 +14,7 @@ namespace Ruccho.WaterRW.Utilities
         {
             if (!Target) base.OnInspectorGUI();
 
-            var meshRenderer = Target.GetComponent<MeshRenderer>();
+            var meshRenderer = Target.GetComponent<Renderer>();
 
             if (!meshRenderer)
             {
