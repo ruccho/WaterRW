@@ -94,6 +94,7 @@ WaterRW uses the shader `Water-RW/With Compute`.
 | Fade Distance in Viewport Space   | `Float `    | Vertical size of fade to avoid display reflection areas out of Camera Sorting Layer Texture. |
 | Smooth Buffer Edge in World Space | `Float `    | Size of smoothing area in world space at the edge of wave buffer.                            |
 | Reflection Intensity              | `Float`     | Intensity of reflection.                                                                     |
+| Enable Lighting                   | `bool`      | Enables Light2D integration (experimental).                                                  |
 
 ## 🏄 Enable Interactions
 
