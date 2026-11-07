@@ -51,9 +51,10 @@ float interactionDelta(float src, uint index, float widthInUnit, InteractionItem
 
 float getWaveValue(RWTexture2D<float> buffer, int pos, uint bufferWidth)
 {
-    int clampedPos = clamp(pos, 0, bufferWidth - 1);
+    int width = (int)bufferWidth;
+    int clampedPos = clamp(pos, 0, width - 1);
     float w = buffer[uint2(clampedPos, 0)];
-    return (0 <= pos && pos < bufferWidth) ? w : 0;
+    return (0 <= pos && pos < width) ? w : 0;
 }
 
 [numthreads(1024,1,1)]
