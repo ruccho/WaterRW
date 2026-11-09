@@ -492,12 +492,33 @@ namespace Ruccho
         private void OnDestroy()
         {
             interactionBuffer?.Release();
+            interactionBuffer = null;
             if (vertexBuffer.IsCreated) vertexBuffer.Dispose();
             if (indexBuffer.IsCreated) indexBuffer.Dispose();
 
-            for (var i = 0; i < waveBuffers.Length; i++)
+            // waveBuffers is created on the first update, so it is null
+            // when the component is destroyed without ever being updated (e.g. while disabled).
+            if (waveBuffers != null)
             {
-                waveBuffers[i].Dispose();
+                for (var i = 0; i < waveBuffers.Length; i++)
+                {
+                    waveBuffers[i].Dispose();
+                }
+
+                waveBuffers = null;
+            }
+
+            // instances created by MeshRenderer.material and new Mesh()
+            if (material != null)
+            {
+                Destroy(material);
+                material = null;
+            }
+
+            if (mesh != null)
+            {
+                Destroy(mesh);
+                mesh = null;
             }
         }
 
